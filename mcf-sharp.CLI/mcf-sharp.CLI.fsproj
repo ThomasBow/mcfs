@@ -1,0 +1,20 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>McfSharp</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Program.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\mcf-sharp.AST\mcf-sharp.Ast.fsproj" />
+    <ProjectReference Include="..\mcf-sharp.Compiler\mcf-sharp.Compiler.fsproj" />
+    <ProjectReference Include="..\mcf-sharp.Parser\mcf-sharp.Parser.fsproj" />
+    <ProjectReference Include="..\mcf-sharp.Standard\mcf-sharp.Standard.fsproj" />
+  </ItemGroup>
+
+</Project>

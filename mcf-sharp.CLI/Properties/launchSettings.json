@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "mcf-sharp.CLI": {
+      "commandName": "Project",
+      "commandLineArgs": "C:\\Users\\thoma\\source\\repos\\mcf-sharp\\test.mcfs"
+    }
+  }
+}

@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="test.mcfs" />
+  </Folder>
+  <Project Path="mcf-sharp.AST/mcf-sharp.Ast.fsproj" />
+  <Project Path="mcf-sharp.CLI/mcf-sharp.CLI.fsproj" />
+  <Project Path="mcf-sharp.Compiler/mcf-sharp.Compiler.fsproj" />
+  <Project Path="mcf-sharp.Parser/mcf-sharp.Parser.fsproj" />
+  <Project Path="mcf-sharp.Standard/mcf-sharp.standard.fsproj" />
+</Solution>

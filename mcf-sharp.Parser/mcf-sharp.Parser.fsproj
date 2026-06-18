@@ -1,0 +1,19 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>McfSharp.Parser</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Token.fs" />
+    <Compile Include="Lexer.fs" />
+    <Compile Include="Parser.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\mcf-sharp.AST\mcf-sharp.Ast.fsproj" />
+  </ItemGroup>
+
+</Project>

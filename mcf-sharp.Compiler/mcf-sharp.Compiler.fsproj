@@ -1,0 +1,21 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>McfSharp.Compiler</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Ir.fs" />
+    <Compile Include="Semantic.fs" />
+    <Compile Include="Lowering.fs" />
+    <Compile Include="Emitter.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\mcf-sharp.AST\mcf-sharp.Ast.fsproj" />
+    <ProjectReference Include="..\mcf-sharp.Parser\mcf-sharp.Parser.fsproj" />
+  </ItemGroup>
+
+</Project>

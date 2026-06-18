@@ -1,0 +1,18 @@
+
+
+
+
+
+@load
+{
+    test: 1234;
+}
+
+fn TestFunction(x, y) {
+    if test > 10 + x {
+        return y;
+    }
+    else {
+        return x + x * y;
+    }
+} 
