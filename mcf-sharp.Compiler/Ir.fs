@@ -4,7 +4,7 @@
 
 module Ir
 
-type ComparisonOperator =
+type IrComparisonOperator =
     | IrLessThan
     | IrLessThanOrEqual
     | IrGreaterThan
@@ -12,7 +12,7 @@ type ComparisonOperator =
     | IrEquals
     | IrNotEquals
 
-type NBTValue = 
+type IrNBTValue = 
     | NBTByte       of int8
     | NBTShort      of int16
     | NBTInt        of int32
@@ -20,8 +20,8 @@ type NBTValue =
     | NBTFloat      of float32
     | NBTDouble     of float
     | NBTString     of string
-    | NBTList       of NBTValue list
-    | NBTCompound   of Map<string, NBTValue>
+    | NBTList       of IrNBTValue list
+    | NBTCompound   of Map<string, IrNBTValue>
 
 type IrInstruction =
     | IrSetConstant         of destination: string * value: int
@@ -32,11 +32,11 @@ type IrInstruction =
     | IrDivide              of destination: string * source: string
     | IrModulo              of destination: string * source: string
     
-    | IrStorageSet          of path: string * value: NBTValue
+    | IrStorageSet          of path: string * value: IrNBTValue
     | IrStorageGet          of destination: string * path: string
     
     | IrCall                of functionName: string
-    | IrConditionalCall     of valueA: string * operator: ComparisonOperator * valueB: string * functionName: string
+    | IrConditionalCall     of valueA: string * operator: IrComparisonOperator * valueB: string * functionName: string
     | IrMacroCall           of functionName: string * storageArgumentPath: string
 
 type IrFunction = 
