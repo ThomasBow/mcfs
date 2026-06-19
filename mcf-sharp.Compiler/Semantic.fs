@@ -19,6 +19,17 @@ let analyse (program: Program) : Result<Program, SemanticError list> =
 
     let errors = System.Collections.Generic.List<SemanticError>()
 
+    // Gather all variables declared in @load blocks
+    let loadDeclaredVariables =
+        program.TaggedBlocks
+        |> List.filter (fun block -> block.Tag = Load)
+        |> List.collect (fun block -> block.Statements)
+        |> List.choose (fun statement ->
+            match statement with
+            | VariableDeclaration (name, _) -> Some name
+            | _ -> None)
+        |> Set.ofList
+
     let rec checkExpression (declared: Set<string>) (expression: Expression) =
         match expression with
             | IntLiteral _ -> ()
@@ -62,10 +73,16 @@ let analyse (program: Program) : Result<Program, SemanticError list> =
                 declared
 
     let checkFunction (func: FunctionDefinition) =
-        let declared = func.Parameters |> Set.ofList
+        let declared = func.Parameters |> Set.ofList |> Set.union loadDeclaredVariables
         List.fold checkStatement declared func.Body |> ignore
 
+    // Also check the tagged blocks
+    let checkTaggedBlock (block: TaggedBlock) =
+        let declared = Set.empty
+        List.fold checkStatement declared block.Statements |> ignore
+
     List.iter checkFunction program.Functions
+    List.iter checkTaggedBlock program.TaggedBlocks
 
     let errorSequence = Seq.toList errors
     if List.isEmpty errorSequence then

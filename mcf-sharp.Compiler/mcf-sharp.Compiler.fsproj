@@ -11,6 +11,7 @@
     <Compile Include="Semantic.fs" />
     <Compile Include="Lowering.fs" />
     <Compile Include="Emitter.fs" />
+    <Compile Include="Writer.fs" />
   </ItemGroup>
 
   <ItemGroup>

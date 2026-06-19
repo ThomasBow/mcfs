@@ -25,7 +25,7 @@ let getFreshControlFlowFlagVariable (state: LoweringState) =
 let getArgumentVariable (argumentNumber: int) =
     $".argument{argumentNumber}"
 
-let getFlowControlBlockName (functionName: string, blockType: string, state: LoweringState) =
+let getControlFlowBlockName (functionName: string, blockType: string, state: LoweringState) =
     let name = $"{functionName}_{blockType}{state.TempCount}"
     state.TempCount <- state.TempCount + 1
     name
@@ -52,7 +52,7 @@ let rec lowerExpression (state: LoweringState) (expression: Expression) : IrInst
                     | Subtract -> IrSubtract (temp, rightVariable)
                     | Multiply -> IrMultiply (temp, rightVariable)
                     | Divide -> IrMultiply (temp, rightVariable)
-                    | _ -> failwith "Operator type is not valid."
+                    | operator -> failwith $"Operator type is not valid ({operator})."
             leftInstructions @ rightInstructions @ [IrCopy (temp, leftVariable); operatorInstruction], temp
 
         | Call (functionName, arguments) ->
@@ -81,7 +81,7 @@ let lowerCondition (state: LoweringState) (condition: Expression) (functionName:
                     | LessThanOrEqual -> IrLessThanOrEqual
                     | GreaterThan -> IrGreaterThan
                     | GreaterThanOrEqual -> IrGreaterThanOrEqual
-                    | _ -> failwith "Operator type is not valid for conditionals."
+                    | operator -> failwith $"Operator type is not valid for conditionals ({operator}). "
             leftInstructions @ rightInstructions @ [IrConditionalCall (leftVariable, irOperator, rightVariable, functionName)]
         | _ -> failwith "Condition must be a comparison expression"
 
@@ -121,7 +121,7 @@ let rec lowerStatement (state: LoweringState) (functionName: string) (statement:
             let flagSetupInstruction = IrSetConstant (controlFlowFlagVariable, 1)
             let ifFlagInstruction = IrSetConstant (controlFlowFlagVariable, 0)
 
-            let thenName = getFlowControlBlockName(functionName, "then", state)
+            let thenName = getControlFlowBlockName(functionName, "then", state)
             let thenInstructions, thenFunctions = lowerStatements state functionName thenBranch
             let thenFunction = { Name = thenName; Instructions = [ifFlagInstruction] @ thenInstructions }
             let conditionInstructions = lowerCondition state condition thenName
@@ -130,7 +130,7 @@ let rec lowerStatement (state: LoweringState) (functionName: string) (statement:
                 match elseBranch with
                     | None -> [], []
                     | Some elseStatements ->
-                        let elseName = getFlowControlBlockName(functionName, "else", state)
+                        let elseName = getControlFlowBlockName(functionName, "else", state)
                         let elseInstructions, elseFunctions = lowerStatements state elseName elseStatements
                         let elseFunction = { Name = elseName; Instructions = elseInstructions }
                         let flagCondition = lowerCondition state (BinaryOperator(Equals, Variable(controlFlowFlagVariable), (IntLiteral (1)))) elseName 
@@ -141,12 +141,17 @@ let rec lowerStatement (state: LoweringState) (functionName: string) (statement:
             allInstructions, allFunctions
 
         | While (condition, body) ->
-            let whileName = getFlowControlBlockName(functionName, "while", state)
+            let whileName = getControlFlowBlockName(functionName, "while", state)
             let bodyInstructions, bodyFunctions = lowerStatements state whileName body
-            let conditionInstructions = lowerCondition state condition functionName
-            // The loop function checks condition, runs body, then calls itself again
-            let whileFunction = { Name = whileName; Instructions = bodyInstructions}
-            conditionInstructions, [whileFunction] @ bodyFunctions
+
+            let conditionFunctionName = getControlFlowBlockName(functionName, "while_condition", state)
+            let conditionInstructions = lowerCondition state condition whileName
+            let callConditionInstruction = IrCall(conditionFunctionName)
+
+            let whileFunction = { Name = whileName; Instructions = bodyInstructions @ [callConditionInstruction] }
+            let conditionFunction = { Name = conditionFunctionName; Instructions = conditionInstructions }
+
+            [callConditionInstruction], [conditionFunction; whileFunction] @ bodyFunctions
 
 and lowerStatements (state: LoweringState) (functionName: string) (statements: Statement list) : IrInstruction list * IrFunction list =
     statements
