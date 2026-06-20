@@ -55,7 +55,8 @@ let parse (tokens: Token list) : Program =
 
     and parsePrimary () = 
         match advance() with
-            | TInt n -> IntLiteral n
+            | TypeInt n -> IntLiteral n
+            | TypeString s -> StringLiteral s
             | TIdentifier s -> Variable s
             | token -> failwithf "Unexpected token in expression: %A" token
 
@@ -66,6 +67,7 @@ let parse (tokens: Token list) : Program =
             | TIf -> parseIf()
             | TWhile -> parseWhile()
             | TReturn -> parseReturn()
+            | TMcf -> parseMcf()
             | token -> failwithf "Unexpected token in statement: %A" token
 
     and parseIdentifierStatement (identifier: string) =
@@ -124,12 +126,21 @@ let parse (tokens: Token list) : Program =
     
         Return(expression)
 
+    and parseMcf () =
+        let str = 
+            match advance() with
+                | TypeString s -> s
+                | token -> failwithf "Expected a string for raw command, but got %A" token
+        expect TSemicolon
+        RawCommand str
+               
+
     let parseTaggedBlock () = 
         let tag = 
             match advance() with
                 | TTick -> Tick
                 | TLoad -> Load
-                | token -> failwithf "Expected a tag (tick or load), but got '%A'" token
+                | token -> failwithf "Expected a tag (tick or load), but got %A" token
         let blockBody = parseBlock()
 
         { Tag = tag; Statements = blockBody }

@@ -119,12 +119,12 @@ let rec lowerStatement (state: LoweringState) (functionName: string) (statement:
             // Each branch becomes its own function file
             let controlFlowFlagVariable = getFreshControlFlowFlagVariable state
             let flagSetupInstruction = IrSetConstant (controlFlowFlagVariable, 1)
-            let ifFlagInstruction = IrSetConstant (controlFlowFlagVariable, 0)
+            let ifFlagSetInstruction = IrSetConstant (controlFlowFlagVariable, 0)
 
             let thenName = getControlFlowBlockName(functionName, "then", state)
             let thenInstructions, thenFunctions = lowerStatements state functionName thenBranch
-            let thenFunction = { Name = thenName; Instructions = [ifFlagInstruction] @ thenInstructions }
-            let conditionInstructions = lowerCondition state condition thenName
+            let thenFunction = { Name = thenName; Instructions = [ifFlagSetInstruction] @ thenInstructions }
+            let ifConditionInstructions = lowerCondition state condition thenName
 
             let elseFunctions = 
                 match elseBranch with
@@ -134,10 +134,11 @@ let rec lowerStatement (state: LoweringState) (functionName: string) (statement:
                         let elseInstructions, elseFunctions = lowerStatements state elseName elseStatements
                         let elseFunction = { Name = elseName; Instructions = elseInstructions }
                         let flagCondition = lowerCondition state (BinaryOperator(Equals, Variable(controlFlowFlagVariable), (IntLiteral (1)))) elseName 
-                        [], [elseFunction] @ elseFunctions
+                        flagCondition, [elseFunction] @ elseFunctions
 
-            let allInstructions = [flagSetupInstruction] @ conditionInstructions
-            let allFunctions = [thenFunction] @ thenFunctions @ snd elseFunctions
+            let elseInstructions, elseFunctionList = elseFunctions
+            let allInstructions = [flagSetupInstruction] @ ifConditionInstructions @ elseInstructions
+            let allFunctions = [thenFunction] @ thenFunctions @ elseFunctionList
             allInstructions, allFunctions
 
         | While (condition, body) ->
@@ -152,6 +153,9 @@ let rec lowerStatement (state: LoweringState) (functionName: string) (statement:
             let conditionFunction = { Name = conditionFunctionName; Instructions = conditionInstructions }
 
             [callConditionInstruction], [conditionFunction; whileFunction] @ bodyFunctions
+
+        | RawCommand command ->
+            [IrRawCommand command], []
 
 and lowerStatements (state: LoweringState) (functionName: string) (statements: Statement list) : IrInstruction list * IrFunction list =
     statements

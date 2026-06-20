@@ -15,6 +15,7 @@ type BinaryOperatorKind =
 
 type Expression = 
     | IntLiteral of int
+    | StringLiteral of string
     | Variable of string
     | BinaryOperator of op: BinaryOperatorKind * left: Expression * right: Expression
     | Call of functionName: string * arguments: Expression list
@@ -26,6 +27,7 @@ type Statement =
     | While of condition: Expression * body: Statement list
     | FunctionCall of functionName: string * arguments: Expression list
     | Return of value: Expression option
+    | RawCommand of command: string
 
 type Parameter = 
     { Name: string; Type: string }

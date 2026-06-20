@@ -62,6 +62,15 @@ let tokenize (source: string) : Token list =
                 i <- i + 1
             tokens.Add(TInt(int source[start..i-1]))
 
+        | '"' ->
+            i <- i + 1
+            let start = i
+            while i < source.Length && source[i] <> '"' do
+                i <- i + 1
+            let str = source[start..i-1]
+            tokens.Add(TString str)
+            i <- i + 1
+
         // Identifiers - If current character is a letter, go to next none letter or digit, convert everything from current to next none letter/digit - 1 into a keyword/identifier 
         | character when System.Char.IsLetter(character) ->
             let start = i
@@ -75,6 +84,7 @@ let tokenize (source: string) : Token list =
                     | "else" -> TElse
                     | "while" -> TWhile
                     | "return" -> TReturn
+                    | "mcf" -> TMcf
                     | _ -> TIdentifier word
             )        
 

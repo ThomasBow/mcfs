@@ -5,6 +5,7 @@ module Token
 
 type Token = 
     | TIdentifier of string
+    | TString of string
     | TInt of int
     | TPlus
     | TMinus
@@ -34,3 +35,4 @@ type Token =
     | TEndOfFile
     | TTick
     | TLoad
+    | TMcf

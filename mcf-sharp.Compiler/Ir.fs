@@ -38,6 +38,8 @@ type IrInstruction =
     | IrCall                of functionName: string
     | IrConditionalCall     of valueA: string * operator: IrComparisonOperator * valueB: string * functionName: string
     | IrMacroCall           of functionName: string * storageArgumentPath: string
+    
+    | IrRawCommand          of command: string
 
 type IrFunction = 
     { Name: string; Instructions: IrInstruction list }

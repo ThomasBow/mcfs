@@ -33,6 +33,8 @@ let analyse (program: Program) : Result<Program, SemanticError list> =
     let rec checkExpression (declared: Set<string>) (expression: Expression) =
         match expression with
             | IntLiteral _ -> ()
+            | IntLiteral _ -> TypeInt
+            | StringLiteral _ -> TypeString
             | Variable name ->
                 if not (Set.contains name declared) then
                     errors.Add (UndeclaredVariable $"Undeclared Variable {name}")
@@ -70,6 +72,8 @@ let analyse (program: Program) : Result<Program, SemanticError list> =
                 declared
             | Return value ->
                 value |> Option.iter (checkExpression declared)
+                declared
+            | RawCommand _ -> 
                 declared
 
     let checkFunction (func: FunctionDefinition) =
