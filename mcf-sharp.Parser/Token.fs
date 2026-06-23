@@ -1,12 +1,12 @@
 
 module Token
 
-
+open Ast
 
 type Token = 
     | TIdentifier of string
-    | TString of string
-    | TInt of int
+    | TStringLiteral of string
+    | TIntLiteral of int
     | TPlus
     | TMinus
     | TTimes
@@ -36,3 +36,10 @@ type Token =
     | TTick
     | TLoad
     | TMcf
+    | TInt
+    | TString
+    | TVoid
+    | TBool
+
+type PositionedToken =
+    { Token: Token; Position: Position }

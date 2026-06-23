@@ -1,6 +1,19 @@
 
 module Ast
 
+type Position =
+    { Line: int; Column: int }
+
+type Node<'a> =
+    { Value: 'a; Position: Position }
+
+type Type =
+    | TypeInt
+    | TypeBool
+    | TypeVoid
+    | TypeString
+    | TypeError
+
 type BinaryOperatorKind =
     | Add
     | Subtract
@@ -17,30 +30,30 @@ type Expression =
     | IntLiteral of int
     | StringLiteral of string
     | Variable of string
-    | BinaryOperator of op: BinaryOperatorKind * left: Expression * right: Expression
-    | Call of functionName: string * arguments: Expression list
+    | BinaryOperator of op: BinaryOperatorKind * left: Node<Expression> * right: Node<Expression>
+    | Call of functionName: string * arguments: Node<Expression> list
 
 type Statement =
-    | VariableDeclaration of name: string * initializer: Expression option
-    | VariableAssignment of name: string * value: Expression
-    | If of condition: Expression * thenBranch: Statement list * elseBranch: Statement list option
-    | While of condition: Expression * body: Statement list
-    | FunctionCall of functionName: string * arguments: Expression list
-    | Return of value: Expression option
+    | VariableDeclaration of name: string * typeHint: Type option * initializer: Node<Expression> option
+    | VariableAssignment of name: string * value: Node<Expression>
+    | If of condition: Node<Expression> * thenBranch: Node<Statement> list * elseBranch: Node<Statement> list option
+    | While of condition: Node<Expression> * body: Node<Statement> list
+    | FunctionCall of functionName: string * arguments: Node<Expression> list
+    | Return of value: Node<Expression> option
     | RawCommand of command: string
 
 type Parameter = 
-    { Name: string; Type: string }
+    { Name: string; Type: Type }
 
 type FunctionDefinition =
-    { Name: string; Parameters: string list; Body: Statement list}
+    { Name: string; Parameters: Parameter list; Body: Node<Statement> list; ReturnType: Type }
 
 type Tag =
     | Load
     | Tick
 
 type TaggedBlock =
-    {Tag: Tag; Statements: Statement list}
+    {Tag: Tag; Statements: Node<Statement> list }
 
 type Program =
     { Functions: FunctionDefinition list; TaggedBlocks: TaggedBlock list}

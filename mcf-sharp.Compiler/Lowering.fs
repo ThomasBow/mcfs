@@ -10,7 +10,10 @@ open Ir
 
 type LoweringState = { mutable TempCount: int }
 let returnVariable = ".return"
-
+let unwrap (node: Node<'a>) =
+    node.Value
+let listUnwrap (list: Node<'a> list) =
+    list |> List.map unwrap
 
 let getFreshTemp (state: LoweringState) =
     let name = $".temp{state.TempCount}"
@@ -18,7 +21,7 @@ let getFreshTemp (state: LoweringState) =
     name
 
 let getFreshControlFlowFlagVariable (state: LoweringState) =
-    let name = $".conditionFlag{state.TempCount}"
+    let name = $".condition_flag{state.TempCount}"
     state.TempCount <- state.TempCount + 1
     name
 
@@ -30,6 +33,9 @@ let getControlFlowBlockName (functionName: string, blockType: string, state: Low
     state.TempCount <- state.TempCount + 1
     name
 
+let getPlainVariableName (variable: string) =
+    "." + variable
+
 // Lowers an expression into a sequence of instructions,
 // returning the instructions and the name of the result variable
 let rec lowerExpression (state: LoweringState) (expression: Expression) : IrInstruction list * string =
@@ -37,13 +43,15 @@ let rec lowerExpression (state: LoweringState) (expression: Expression) : IrInst
         | IntLiteral n ->
             let temp = getFreshTemp state
             [IrSetConstant (temp, n)], temp
-
+        | StringLiteral s ->
+            let temp = getFreshTemp state
+            [IrStorageSet (temp, NBTString s)], temp
         | Variable name ->
             [], name
 
         | BinaryOperator (operator, left, right) ->
-            let leftInstructions, leftVariable = lowerExpression state left
-            let rightInstructions, rightVariable = lowerExpression state right
+            let leftInstructions, leftVariable = lowerExpression state (unwrap left)
+            let rightInstructions, rightVariable = lowerExpression state (unwrap right)
             let temp = getFreshTemp state
 
             let operatorInstruction = 
@@ -60,7 +68,7 @@ let rec lowerExpression (state: LoweringState) (expression: Expression) : IrInst
             let argumentInstructions =
                 arguments |> 
                     List.mapi (fun i argument -> 
-                        let instructions, argumentVariable = lowerExpression state argument
+                        let instructions, argumentVariable = lowerExpression state (unwrap argument)
                         let argumentSlot = getArgumentVariable i
                         instructions @ [IrCopy (argumentSlot, argumentVariable)]
                     ) |> List.concat
@@ -70,8 +78,8 @@ let rec lowerExpression (state: LoweringState) (expression: Expression) : IrInst
 let lowerCondition (state: LoweringState) (condition: Expression) (functionName: string) : IrInstruction list =
     match condition with
         | BinaryOperator (operator, left, right) ->
-            let leftInstructions, leftVariable = lowerExpression state left
-            let rightInstructions, rightVariable = lowerExpression state right
+            let leftInstructions, leftVariable = lowerExpression state (unwrap left)
+            let rightInstructions, rightVariable = lowerExpression state (unwrap right)
 
             let irOperator = 
                 match operator with
@@ -87,19 +95,21 @@ let lowerCondition (state: LoweringState) (condition: Expression) (functionName:
 
 let rec lowerStatement (state: LoweringState) (functionName: string) (statement: Statement) : IrInstruction list * IrFunction list =
     match statement with
-        | VariableDeclaration (name, Some init) ->
-            let initInstructions, initVariable = lowerExpression state init
+        | VariableDeclaration (name, typeHint, Some init) ->
+            let initInstructions, initVariable = lowerExpression state (unwrap init)
             initInstructions @ [IrCopy (name, initVariable)], []
 
-        | VariableDeclaration (_, None) ->
-            [], []
+        | VariableDeclaration (name, typeHint, None) ->
+            match typeHint with
+            | Some TypeInt | Some TypeBool -> [IrSetConstant (name, 0)], []
+            | _ -> [], []
 
         | VariableAssignment (name, value) ->
-            let valueInstructions, valueVariable = lowerExpression state value
+            let valueInstructions, valueVariable = lowerExpression state (unwrap value)
             valueInstructions @ [IrCopy(name, valueVariable)], []
 
         | Return (Some value) ->
-            let valueInstructions, valueVariable = lowerExpression state value
+            let valueInstructions, valueVariable = lowerExpression state (unwrap value)
             valueInstructions @ [IrCopy(returnVariable, valueVariable)], []
 
         | Return (None) ->
@@ -109,7 +119,7 @@ let rec lowerStatement (state: LoweringState) (functionName: string) (statement:
             let argumentInstructions =
                 arguments |> 
                     List.mapi (fun i argument -> 
-                        let instructions, argumentVariable = lowerExpression state argument
+                        let instructions, argumentVariable = lowerExpression state argument.Value
                         let argumentSlot = getArgumentVariable i
                         instructions @ [IrCopy (argumentSlot, argumentVariable)]
                     ) |> List.concat
@@ -122,18 +132,18 @@ let rec lowerStatement (state: LoweringState) (functionName: string) (statement:
             let ifFlagSetInstruction = IrSetConstant (controlFlowFlagVariable, 0)
 
             let thenName = getControlFlowBlockName(functionName, "then", state)
-            let thenInstructions, thenFunctions = lowerStatements state functionName thenBranch
+            let thenInstructions, thenFunctions = lowerStatements state functionName (listUnwrap thenBranch)
             let thenFunction = { Name = thenName; Instructions = [ifFlagSetInstruction] @ thenInstructions }
-            let ifConditionInstructions = lowerCondition state condition thenName
+            let ifConditionInstructions = lowerCondition state (unwrap condition) thenName
 
             let elseFunctions = 
                 match elseBranch with
                     | None -> [], []
                     | Some elseStatements ->
                         let elseName = getControlFlowBlockName(functionName, "else", state)
-                        let elseInstructions, elseFunctions = lowerStatements state elseName elseStatements
+                        let elseInstructions, elseFunctions = lowerStatements state elseName (listUnwrap elseStatements)
                         let elseFunction = { Name = elseName; Instructions = elseInstructions }
-                        let flagCondition = lowerCondition state (BinaryOperator(Equals, Variable(controlFlowFlagVariable), (IntLiteral (1)))) elseName 
+                        let flagCondition = lowerCondition state (BinaryOperator(Equals, { Value = Variable(controlFlowFlagVariable); Position = { Line = 0; Column = 0 } }, ({ Value = IntLiteral (1); Position = { Line = 0; Column = 0 } }))) elseName 
                         flagCondition, [elseFunction] @ elseFunctions
 
             let elseInstructions, elseFunctionList = elseFunctions
@@ -143,10 +153,10 @@ let rec lowerStatement (state: LoweringState) (functionName: string) (statement:
 
         | While (condition, body) ->
             let whileName = getControlFlowBlockName(functionName, "while", state)
-            let bodyInstructions, bodyFunctions = lowerStatements state whileName body
+            let bodyInstructions, bodyFunctions = lowerStatements state whileName (listUnwrap body) 
 
             let conditionFunctionName = getControlFlowBlockName(functionName, "while_condition", state)
-            let conditionInstructions = lowerCondition state condition whileName
+            let conditionInstructions = lowerCondition state (unwrap condition) whileName
             let callConditionInstruction = IrCall(conditionFunctionName)
 
             let whileFunction = { Name = whileName; Instructions = bodyInstructions @ [callConditionInstruction] }
@@ -170,7 +180,7 @@ let lowerProgram (program: Program) : IrProgram =
     let functions = 
         program.Functions
         |> List.collect (fun func ->
-            let instructions, controlFlowFunctions = lowerStatements state func.Name func.Body
+            let instructions, controlFlowFunctions = lowerStatements state func.Name (listUnwrap func.Body) 
             { Name = func.Name; Instructions = instructions } :: controlFlowFunctions
         )
 
@@ -178,7 +188,7 @@ let lowerProgram (program: Program) : IrProgram =
         program.TaggedBlocks
         |> List.collect (fun block ->
             let tagName = match block.Tag with Load -> "load" | Tick -> "tick"
-            let instructions, controlFlowFunctions = lowerStatements state tagName block.Statements
+            let instructions, controlFlowFunctions = lowerStatements state tagName (listUnwrap block.Statements) 
             { Name = tagName; Instructions = instructions } :: controlFlowFunctions
         )
 

@@ -5,14 +5,16 @@
 
 @load
 {
-    test: 1234;
+    test: int = 1234;
 }
 
-fn TestFunction(x, y) {
+fn int TestFunction(x: int, y: int) {
+    g: int;
     if test > 10 + x {
-        return y;
+        g = y;
     }
     else {
         return x + x * y;
     }
+    return g;
 } 
