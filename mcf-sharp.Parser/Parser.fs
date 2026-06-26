@@ -6,48 +6,56 @@ module Parser
 open Token
 open Ast
 
+
+type ParseError =
+    | Generic of string
+
 let formatError(message: string) (position: Position) =
     $"{message} (Location {position.Line}:{position.Column})"
-
-
 
 let parse (tokens: PositionedToken list) : Program = 
     let mutable i = 0
     let peek () = tokens[i].Token
     let advance () = let token = tokens[i].Token in i <- i + 1; token
 
-    let rest () = tokens[i..tokens.Length - 1]
-
     let currentPosition () = 
         tokens[i].Position
     let node value = { Value = value; Position = currentPosition() }
 
+    let errors = System.Collections.Generic.List<ParseError>()
+
     let expect token =
         if peek() = token then advance() |> ignore
-        else failwithf "Expected %A but got %A (Location %i:%i)" token (peek()) (currentPosition().Line) (currentPosition().Column)
+        else errors.Add (Generic ( formatError $"Expected {token} but got {peek()}" (currentPosition()) ))
 
     let guardAgainstEOF () = if peek() = TEndOfFile then failwithf "Missing closing delimiter."
     let parseIdentifier () = 
         let pos = currentPosition()
         match advance() with
-                | TIdentifier identifier -> identifier
-                | token -> failwith (formatError $"Expected an identifier [a-z(0-9|a-z|-|_)*], but got {token}" pos) 
+                | TIdentifier identifier -> Some identifier
+                | token -> 
+                    errors.Add (Generic ( formatError $"Expected an identifier [a-z(0-9|a-z|-|_)*], but got {token}" pos) )
+                    None
 
     let parseType () = 
         let pos = currentPosition()
         match advance() with 
-                | TInt -> TypeInt
-                | TString -> TypeString
-                | TBool -> TypeBool
-                | TVoid -> TypeVoid
-                | token -> failwith (formatError $"Expected type, but got {token}" pos)
+                | TInt -> Some TypeInt
+                | TString -> Some TypeString
+                | TBool -> Some TypeBool
+                | TVoid -> Some TypeVoid
+                | token -> 
+                    errors.Add ( Generic ( formatError $"Expected type, but got {token}" pos )) 
+                    None
 
     let parseTag () =
         let pos = currentPosition()
         match advance() with
-            | TTick -> Tick 
-            | TLoad -> Load 
-            | token -> failwith (formatError $"Expected a tag (tick or load), but got {token}" pos)
+            | TTick -> Some Tick 
+            | TLoad -> Some Load 
+            | token -> 
+                errors.Add ( Generic ( formatError $"Expected a tag (tick or load), but got {token}" pos) )
+                None
 
     let rec parseExpression () = parseComparison()
 
