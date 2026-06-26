@@ -52,6 +52,8 @@ let emitInstruction (objective: string) (nameSpace: string) (instruction: IrInst
         | IrMacroCall (functionName, storageArgumentPath) -> 
             failwith "Macro Calls Not Implemented Yet"
 
+        | IrRawCommand command -> command
+
 let emitFunction (objective: string) (nameSpace: string) (func: IrFunction) : EmittedFile =
     let lines =
         func.Instructions
