@@ -6,32 +6,41 @@ module Parser
 open Token
 open Ast
 
+
+type ParseError =
+    | Generic of string
+
 let formatError(message: string) (position: Position) =
     $"{message} (Location {position.Line}:{position.Column})"
 
-
-
-let parse (tokens: PositionedToken list) : Program = 
+let parse (tokens: PositionedToken list) : Result<Program, ParseError list> = 
     let mutable i = 0
     let peek () = tokens[i].Token
     let advance () = let token = tokens[i].Token in i <- i + 1; token
-
-    let rest () = tokens[i..tokens.Length - 1]
 
     let currentPosition () = 
         tokens[i].Position
     let node value = { Value = value; Position = currentPosition() }
 
+    let errors = System.Collections.Generic.List<ParseError>()
+
+    let topLevelSynchronise () =
+        while peek() <> TFunction && peek() <> TSnabelA && peek() <> TEndOfFile do
+            advance() |> ignore
+
+    let synchronise () =
+        let mutable current = advance()
+        while current <> TSemicolon && current <> TRightBrace && current <> TEndOfFile do
+            current <- advance()
+
     let expect token =
         if peek() = token then advance() |> ignore
-        else failwithf "Expected %A but got %A (Location %i:%i)" token (peek()) (currentPosition().Line) (currentPosition().Column)
+        else errors.Add (Generic ( formatError $"Expected {token} but got {peek()}" (currentPosition()) ))
 
-    let guardAgainstEOF () = if peek() = TEndOfFile then failwithf "Missing closing delimiter."
-    let parseIdentifier () = 
+    let guardAgainstEOF () = 
         let pos = currentPosition()
-        match advance() with
-                | TIdentifier identifier -> identifier
-                | token -> failwith (formatError $"Expected an identifier [a-z(0-9|a-z|-|_)*], but got {token}" pos) 
+        if peek() = TEndOfFile 
+            then errors.Add ( Generic ( formatError $"Missing closing delimiter." pos ))
 
     let parseType () = 
         let pos = currentPosition()
@@ -40,14 +49,26 @@ let parse (tokens: PositionedToken list) : Program =
                 | TString -> TypeString
                 | TBool -> TypeBool
                 | TVoid -> TypeVoid
-                | token -> failwith (formatError $"Expected type, but got {token}" pos)
+                | token -> 
+                    errors.Add ( Generic ( formatError $"Expected type, but got {token}" pos )) 
+                    ErrorType
+
+    let parseIdentifier () =
+        let pos = currentPosition()
+        match advance() with 
+                | TIdentifier identifier -> identifier;
+                | token -> 
+                    errors.Add ( Generic ( formatError $"Function declaration expected identifier in format:\n\"fn\" Type Identifier \"(\" ( ( Identifier \":\" Type \",\" )* Identifier \":\" Type )? \")\" Block" pos ))
+                    "<error>"
 
     let parseTag () =
         let pos = currentPosition()
         match advance() with
             | TTick -> Tick 
             | TLoad -> Load 
-            | token -> failwith (formatError $"Expected a tag (tick or load), but got {token}" pos)
+            | token -> 
+                errors.Add ( Generic ( formatError $"Expected a tag (tick or load), but got {token}" pos) )
+                ErrorTag
 
     let rec parseExpression () = parseComparison()
 
@@ -62,8 +83,7 @@ let parse (tokens: PositionedToken list) : Program =
                     | TGreaterThan -> GreaterThan
                     | TGreaterThanEqual -> GreaterThanOrEqual
                     | TEqual -> Equals
-                    | TNotEqual -> NotEquals
-                    | token -> failwith (formatError $"Expected comparasion operator (< <=, >, >=, ==, !=), but got {token}" pos)
+                    | _ -> NotEquals
             left <- node(BinaryOperator(operator, left, parseAddSub()))
         left
 
@@ -90,7 +110,9 @@ let parse (tokens: PositionedToken list) : Program =
             | TIntLiteral n -> node(IntLiteral n)
             | TStringLiteral s -> node(StringLiteral s)
             | TIdentifier s -> node(Variable s)
-            | token -> failwith (formatError $"Unexpected token in expression: {token}" pos)
+            | token -> 
+                errors.Add ( Generic ( formatError $"Unexpected token in expression: {token}" pos))                
+                node(ErrorExpression)
 
 
     let rec parseStatement () =
@@ -101,7 +123,10 @@ let parse (tokens: PositionedToken list) : Program =
             | TWhile -> parseWhile()
             | TReturn -> parseReturn()
             | TMcf -> parseMcf()
-            | token -> failwith (formatError $"Unexpected token in statement: {token}" pos)
+            | token -> 
+                errors.Add ( Generic ( formatError $"Unexpected token in statement: {token}" pos ))
+                synchronise()
+                ErrorStatement
 
     and parseIdentifierStatement (identifier: string) =
         let pos = currentPosition()
@@ -109,33 +134,36 @@ let parse (tokens: PositionedToken list) : Program =
             | TColon -> parseVariableDeclaration(identifier)
             | TEqual -> parseVariableAssignment(identifier)
             | TLeftParenthesis -> parseFunctionCall(identifier)
-            | token -> failwith (formatError $"Unexpect token {token}, expected function call '(' or variable declaration ':'." pos)
+            | token -> 
+                errors.Add ( Generic (formatError $"Unexpect token {token}, expected function call '(' or variable declaration ':'." pos))
+                synchronise()
+                ErrorStatement
 
     // Format:
     // Identifier ":" Type ( "=" Expression )? ";" 
     and parseVariableDeclaration (identifier: string) = 
         let pos = currentPosition()
-        let typeHint = 
+        expect TColon
+        let typeHint =             
             match advance() with
-            | TColon -> 
-                match advance() with
-                | TInt -> 
-                    Some(TypeInt)
-                | TString ->              
-                    Some(TypeString)
-                | TBool ->
-                    Some(TypeBool)                
-                | _ -> None
+            | TInt -> 
+                Some TypeInt
+            | TString ->              
+                Some TypeString
+            | TBool ->
+                Some TypeBool               
             | _ -> None
                 
         let expression =           
             match advance() with
             | TEqual -> 
-                let expression = Some(parseExpression())
+                let expression = Some (parseExpression())
                 expect TSemicolon
                 expression
             | TSemicolon -> None
-            | token -> failwith (formatError $"Expected expression or ';', but got {token}" pos)
+            | token -> 
+                errors.Add ( Generic (formatError $"Expected expression or ';', but got {token}" pos))
+                Some (node(ErrorExpression))
 
         VariableDeclaration(identifier, typeHint, expression)
 
@@ -188,7 +216,7 @@ let parse (tokens: PositionedToken list) : Program =
             guardAgainstEOF()
             arguments.Add(parseExpression())
             if peek() = TComma then advance() |> ignore
-        advance() |> ignore
+        expect TRightParenthesis
 
         FunctionCall(identifier, Seq.toList arguments)
          
@@ -222,8 +250,8 @@ let parse (tokens: PositionedToken list) : Program =
     // "fn" Type Identifier "(" ( ( Identifier ":" Type "," )* Identifier ":" Type )? ")" Block
     let parseFunctionDefinition () =
         expect(TFunction)
-        let returnType = parseType()            
-        let functionName = String.map System.Char.ToLower (parseIdentifier())       
+        let returnType = parseType()   
+        let functionName = parseIdentifier()   
         expect TLeftParenthesis
 
         let parameters = System.Collections.Generic.List<Parameter>()
@@ -249,6 +277,13 @@ let parse (tokens: PositionedToken list) : Program =
         match peek() with 
             | TFunction -> functions.Add(parseFunctionDefinition())
             | TSnabelA -> taggedBlocks.Add(parseTaggedBlock())
-            | token -> failwith (formatError $"Only function or tagged blocks can be declared at the top level {token}" pos)
+            | token -> 
+                errors.Add ( Generic ( formatError $"Only function or tagged blocks can be declared at the top level {token}" pos ))
+                topLevelSynchronise()
 
-    { Functions = Seq.toList functions; TaggedBlocks = Seq.toList taggedBlocks }
+    let errorSequence = Seq.toList errors;
+    if List.isEmpty errorSequence
+    then
+        Ok { Functions = Seq.toList functions; TaggedBlocks = Seq.toList taggedBlocks }
+    else 
+        Error errorSequence

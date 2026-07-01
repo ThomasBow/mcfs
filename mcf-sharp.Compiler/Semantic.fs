@@ -26,11 +26,21 @@ type SemanticError =
     | ReturnOutsideFunction of string
     | TypeMismatch of string
     | IncorrectArgumentAmount of string
+    | NameCollision of string
 
 let analyse (program: Program) : Result<Program, SemanticError list> =    
 
     let errors = System.Collections.Generic.List<SemanticError>()
     let declaredFunctions = program.Functions |> List.map (fun func -> func.Name, func) |> Map.ofList
+    let duplicates =
+        program.Functions
+        |> List.map (fun f -> f.Name.ToLower())
+        |> List.groupBy id
+        |> List.filter (fun (_, names) -> List.length names > 1)
+        |> List.map fst
+
+    duplicates |> List.iter (fun name ->
+        errors.Add(NameCollision $"Function name '{name}' collides with another function when lowercased for mcfunction output"))
 
     let rec checkExpression (declaredVariables: Map<string, Type>)(expression: Node<Expression>) : Type =
         match expression with
@@ -41,7 +51,7 @@ let analyse (program: Program) : Result<Program, SemanticError list> =
                     | Some t -> t
                     | None -> 
                         errors.Add (UndeclaredVariable $"Undeclared Variable {name} (Location {pos.Line}:{pos.Column})")
-                        TypeError
+                        ErrorType
             | { Value = BinaryOperator (operator, left, right); Position = pos } ->
                 let leftType = checkExpression declaredVariables left
                 let rightType = checkExpression declaredVariables right
@@ -51,13 +61,13 @@ let analyse (program: Program) : Result<Program, SemanticError list> =
                             | (TypeInt, TypeInt) -> TypeInt
                             | _ -> 
                                 errors.Add (TypeMismatch $"Operator type mismatch ({leftType}{operator}{rightType}) (Location {pos.Line}:{pos.Column})")
-                                TypeError
+                                ErrorType
                     | LessThan | GreaterThan | LessThanOrEqual | GreaterThanOrEqual ->
                         match (leftType, rightType) with 
                             | (TypeInt, TypeInt) -> TypeBool
                             | _ -> 
                                 errors.Add (TypeMismatch $"Operator type mismatch ({leftType}{operator}{rightType}) (Location {pos.Line}:{pos.Column})")
-                                TypeError
+                                ErrorType
                     | Equals | NotEquals ->
                         match (leftType, rightType) with 
                             | (TypeInt, TypeInt) 
@@ -65,32 +75,33 @@ let analyse (program: Program) : Result<Program, SemanticError list> =
                             | (TypeString, TypeString) -> TypeBool
                             | _ -> 
                                 errors.Add (TypeMismatch $"Operator type mismatch ({leftType}{operatorSymbol operator}{rightType}) (Location {pos.Line}:{pos.Column})")
-                                TypeError
+                                ErrorType
                         
             | { Value = Call(name, arguments); Position = pos } ->               
                 match Map.tryFind name declaredFunctions with
                     | None ->
                         errors.Add (UndeclaredFunction $"Undeclared function '{name}' (Location {pos.Line}:{pos.Column})")
-                        TypeError
+                        ErrorType
                     | Some func ->
                         if List.length arguments <> List.length func.Parameters then
                             errors.Add (IncorrectArgumentAmount $"{func.Name} expects {List.length func.Parameters} arguments, but got {List.length arguments} (Location {pos.Line}:{pos.Column})")
-                            TypeError
+                            ErrorType
                         else
                             List.zip arguments func.Parameters
                             |> List.iter (fun (argument, parameter) ->
                                 checkExpressionExpectType declaredVariables parameter.Type argument |> ignore
                             )
                             func.ReturnType
+            | { Value = ErrorExpression } -> ErrorType
         
 
     and checkExpressionExpectType (declaredVariables: Map<string, Type>) (expectedType: Type) (expression: Node<Expression>) : Type =
 
         let expressionType = checkExpression declaredVariables expression
         if expectedType <> expressionType then 
-            if expressionType <> TypeError then
+            if expressionType <> ErrorType then
                 errors.Add (TypeMismatch $"Expression expected type {expectedType}, but got {expressionType} (Location {expression.Position.Line}:{expression.Position.Column})" )
-            TypeError
+            ErrorType
         else expectedType
 
     and checkExpressionTypeOption (declaredVariables: Map<string, Type>) (expectedType: Type option) (expression: Node<Expression>) : Type =
@@ -112,7 +123,7 @@ let analyse (program: Program) : Result<Program, SemanticError list> =
                                     t
                                 | None -> 
                                     errors.Add (InvalidVariableDeclaration $"Variables without initializers must be given a type. ({name}) (Location {pos.Line}:{pos.Column})")
-                                    TypeError
+                                    ErrorType
                 Map.add name declarationType declared
                 
             | { Value = VariableAssignment(name, value); Position = pos } ->
@@ -145,13 +156,15 @@ let analyse (program: Program) : Result<Program, SemanticError list> =
                 declared
             | { Value = RawCommand _ } -> 
                 declared
+            | { Value = ErrorStatement } -> 
+                declared
 
     // Gather all variables declared in @load blocks
     let loadBlockDeclaredVariables =
         program.TaggedBlocks
         |> List.filter (fun block -> block.Tag = Load)
         |> List.collect (fun block -> block.Statements)
-        |> List.fold (fun accu statement -> checkStatement accu TypeError statement) Map.empty            
+        |> List.fold (fun accu statement -> checkStatement accu ErrorType statement) Map.empty            
 
     let checkFunction (func: FunctionDefinition) =
         let declared = 
@@ -163,11 +176,12 @@ let analyse (program: Program) : Result<Program, SemanticError list> =
     let checkTaggedBlock (block: TaggedBlock) =
         let declared =
             match block.Tag with
-            | Tick ->
+            | Tick | ErrorTag ->
                 loadBlockDeclaredVariables
             | Load ->
                 Map.empty
-        List.fold (fun accu statement -> checkStatement accu TypeError statement) declared block.Statements |> ignore
+         
+        List.fold (fun accu statement -> checkStatement accu ErrorType statement) declared block.Statements |> ignore
 
     List.iter checkFunction program.Functions
     List.iter checkTaggedBlock program.TaggedBlocks
