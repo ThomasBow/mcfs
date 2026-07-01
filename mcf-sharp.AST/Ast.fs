@@ -12,7 +12,7 @@ type Type =
     | TypeBool
     | TypeVoid
     | TypeString
-    | TypeError
+    | ErrorType
 
 type BinaryOperatorKind =
     | Add
@@ -32,6 +32,7 @@ type Expression =
     | Variable of string
     | BinaryOperator of op: BinaryOperatorKind * left: Node<Expression> * right: Node<Expression>
     | Call of functionName: string * arguments: Node<Expression> list
+    | ErrorExpression
 
 type Statement =
     | VariableDeclaration of name: string * typeHint: Type option * initializer: Node<Expression> option
@@ -41,6 +42,7 @@ type Statement =
     | FunctionCall of functionName: string * arguments: Node<Expression> list
     | Return of value: Node<Expression> option
     | RawCommand of command: string
+    | ErrorStatement
 
 type Parameter = 
     { Name: string; Type: Type }
@@ -51,6 +53,7 @@ type FunctionDefinition =
 type Tag =
     | Load
     | Tick
+    | ErrorTag
 
 type TaggedBlock =
     {Tag: Tag; Statements: Node<Statement> list }

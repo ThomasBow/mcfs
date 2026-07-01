@@ -59,7 +59,7 @@ let rec lowerExpression (state: LoweringState) (expression: Expression) : IrInst
                     | Add -> IrAdd (temp, rightVariable)
                     | Subtract -> IrSubtract (temp, rightVariable)
                     | Multiply -> IrMultiply (temp, rightVariable)
-                    | Divide -> IrMultiply (temp, rightVariable)
+                    | Divide -> IrDivide (temp, rightVariable)
                     | operator -> failwith $"Operator type is not valid ({operator})."
             leftInstructions @ rightInstructions @ [IrCopy (temp, leftVariable); operatorInstruction], temp
 
@@ -73,6 +73,8 @@ let rec lowerExpression (state: LoweringState) (expression: Expression) : IrInst
                         instructions @ [IrCopy (argumentSlot, argumentVariable)]
                     ) |> List.concat
             argumentInstructions @ [IrCall functionName], returnVariable
+
+        | ErrorExpression -> failwithf "Expression error slipped through previous compiler steps."
 
 // Lowers a comparison expression into an IrConditionalCall
 let lowerCondition (state: LoweringState) (condition: Expression) (functionName: string) : IrInstruction list =
@@ -167,6 +169,8 @@ let rec lowerStatement (state: LoweringState) (functionName: string) (statement:
         | RawCommand command ->
             [IrRawCommand command], []
 
+        | ErrorStatement -> failwithf "Statement error slipped through previous compiler steps."
+
 and lowerStatements (state: LoweringState) (functionName: string) (statements: Statement list) : IrInstruction list * IrFunction list =
     statements
     |> List.map (lowerStatement state functionName)
@@ -180,14 +184,19 @@ let lowerProgram (program: Program) : IrProgram =
     let functions = 
         program.Functions
         |> List.collect (fun func ->
-            let instructions, controlFlowFunctions = lowerStatements state func.Name (listUnwrap func.Body) 
-            { Name = func.Name; Instructions = instructions } :: controlFlowFunctions
+            let funcName = func.Name.ToLower()
+            let instructions, controlFlowFunctions = lowerStatements state funcName (listUnwrap func.Body) 
+            { Name = funcName; Instructions = instructions } :: controlFlowFunctions
         )
 
     let taggedFunctions = 
         program.TaggedBlocks
         |> List.collect (fun block ->
-            let tagName = match block.Tag with Load -> "load" | Tick -> "tick"
+            let tagName = 
+                match block.Tag with 
+                | Load -> "load" 
+                | Tick -> "tick"
+                | ErrorTag -> failwithf "Tag error slipped through previous compiler steps."
             let instructions, controlFlowFunctions = lowerStatements state tagName (listUnwrap block.Statements) 
             { Name = tagName; Instructions = instructions } :: controlFlowFunctions
         )
